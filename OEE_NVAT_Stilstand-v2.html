@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OEE & NVAT Stilstand per module</title>
+<style>
+:root{
+  --bg:#E6E9EB; --panel:#FFFFFF; --ink:#18202B; --muted:#5E6873; --line:#C9CFD4; --soft:#F2F4F5;
+  --signal:#F2C230; --signal-ink:#18202B; --stop:#C8372D; --ok:#2E8C5A;
+  color-scheme:light; box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){--bg:#151A20; --panel:#1E252D; --ink:#E8ECEF; --muted:#98A3AE; --line:#333D47; --soft:#252D36;
+    --stop:#E2574C; --ok:#4FB37E; --signal-ink:#151A20; color-scheme:dark;}
+}
+:root[data-theme="dark"]{--bg:#151A20; --panel:#1E252D; --ink:#E8ECEF; --muted:#98A3AE; --line:#333D47; --soft:#252D36;
+  --stop:#E2574C; --ok:#4FB37E; --signal-ink:#151A20; color-scheme:dark;}
+*,*::before,*::after{box-sizing:inherit}
+html,body{margin:0}
+body{background:var(--bg); color:var(--ink); font-size:15px; line-height:1.35; -webkit-tap-highlight-color:transparent;
+  font-family:Bahnschrift,"DIN Alternate","DIN 2014","Roboto Condensed","Arial Narrow",Arial,sans-serif}
+.wrap{max-width:1400px; margin:0 auto; padding:14px}
+button,input,select{font:inherit; color:inherit}
+button{cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--signal); outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+.panel{background:var(--panel); border:1px solid var(--line); border-radius:6px}
+.btn{border:1px solid var(--line); background:var(--panel); border-radius:6px; padding:9px 12px; font-weight:600;}
+.btn:disabled{opacity:.4; cursor:default}
+.go{background:var(--signal); color:var(--signal-ink); border-color:var(--signal); font-weight:700}
+.end{background:var(--stop); border-color:var(--stop); color:#fff; font-weight:700}
+h1{font-size:22px; margin:0 0 10px; font-weight:600}
+
+/* Formulierkop */
+.head{display:grid; grid-template-columns:1fr auto; gap:14px; padding:14px}
+@media (max-width:760px){.head{grid-template-columns:1fr}}
+.fields{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px 12px}
+.fields label{display:flex; flex-direction:column; font-size:13px; color:var(--muted); gap:3px}
+.fields input,.fields select{padding:7px 8px; border:1px solid var(--line); border-radius:5px; background:var(--panel); color:var(--ink); font-size:15px}
+.clock{display:flex; flex-direction:column; gap:8px; min-width:250px}
+.dtime{font-size:46px; font-weight:600; line-height:1; letter-spacing:-.02em}
+.dmeta{color:var(--muted); font-size:14px}
+.clock .row{display:flex; gap:8px}
+.clock .row .btn{flex:1; padding:12px}
+.link{border:none; background:none; color:var(--muted); text-decoration:underline; padding:2px; font-size:13px; align-self:flex-start}
+.legend{color:var(--muted); font-size:13px; margin:10px 2px}
+
+/* Horizontaal scrollende kolommen */
+.cols{display:grid; grid-auto-columns:minmax(280px,1fr); grid-auto-flow:column; gap:12px; overflow-x:auto; padding-bottom:6px}
+.col{padding:12px; display:flex; flex-direction:column; gap:10px}
+.name{font-size:18px; font-weight:600; padding:6px 8px; border:1px solid transparent; border-radius:5px; background:var(--soft); width:100%}
+.name:hover{border-color:var(--line)}
+.status{border-radius:6px; padding:10px 12px; background:var(--ok); color:#fff; display:flex; justify-content:space-between; align-items:center; gap:8px; min-height:58px}
+.status.idle{background:var(--soft); color:var(--muted)}
+.status.stil{background:var(--c)}
+.status b{font-size:17px}
+.status .t{font-size:24px; font-weight:600}
+.codes{display:grid; grid-template-columns:1fr 1fr; gap:6px}
+.code{position:relative; text-align:left; border:1px solid var(--line); background:var(--panel); border-radius:6px; padding:7px 8px 7px 14px; min-height:54px}
+.code::before{content:""; position:absolute; left:0; top:0; bottom:0; width:6px; border-radius:6px 0 0 6px; background:var(--c)}
+.code .k{font-weight:700; font-size:17px; display:block; line-height:1.1}
+.code .n{font-size:12.5px; color:var(--muted)}
+.code.active{background:var(--c); border-color:var(--c); color:#fff}
+.code.active .n{color:rgba(255,255,255,.9)}
+.code:disabled{opacity:.45; cursor:default}
+.acts{display:flex; gap:6px}
+.acts .resume{flex:1; padding:12px; font-weight:700; background:var(--ok); border-color:var(--ok); color:#fff}
+.sum{font-size:14px; border-top:1px solid var(--line); padding-top:8px}
+.sum .big{display:flex; justify-content:space-between; font-size:16px; font-weight:600}
+.sum .pc{display:flex; justify-content:space-between; color:var(--muted)}
+.bar{display:flex; height:10px; border-radius:3px; overflow:hidden; background:var(--soft); margin:6px 0}
+.bar div{background:var(--c)}
+.log{display:flex; flex-direction:column; gap:6px}
+.entry{border:1px solid var(--line); border-left:6px solid var(--c); border-radius:5px; padding:6px 8px; background:var(--panel)}
+.entry.under{opacity:.55}
+.entry .top{display:flex; justify-content:space-between; gap:6px; font-size:14px}
+.entry .top b{font-weight:700}
+.entry .flag{font-size:12px; color:var(--muted)}
+.entry input{width:100%; margin-top:5px; padding:5px 7px; border:1px solid var(--line); border-radius:4px; background:var(--soft); color:var(--ink); font-size:14px}
+.empty{color:var(--muted); font-size:14px; padding:4px 2px}
+.foot{display:flex; gap:8px; flex-wrap:wrap; margin-top:14px}
+
+.dlg{position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.45); padding:16px; z-index:20}
+.dlg.open{display:flex}
+.dlg .box{background:var(--panel); color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:18px; max-width:420px; width:100%}
+.dlg .bt{display:flex; gap:8px; justify-content:flex-end; margin-top:14px}
+
+/* Print CSS voor PDF OEE Rapport */
+@media print {
+  body { background: #fff !important; color: #000 !important; }
+  .panel { border: none !important; box-shadow: none !important; background: transparent !important; }
+  .foot, .acts, .codes, .btn, .link, .legend { display: none !important; }
+  .cols { display: block !important; overflow: visible !important; }
+  .col { page-break-inside: avoid; border: 1px solid #ccc !important; border-radius: 6px; margin-bottom: 20px; width: 100%; display: block !important; padding: 15px; }
+  .wrap { padding: 0 !important; max-width: 100%; }
+  .head { border-bottom: 2px solid #000; margin-bottom: 20px; padding: 0 0 15px 0; }
+  .status { border: 1px solid #ccc !important; color: #000 !important; background: transparent !important; }
+  .log { display: none !important; } /* Verberg detail logs voor een schoon rapport */
+  .fields input, .fields select { border: none; padding: 0; background: transparent; color: #000; font-weight: bold; }
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="panel head">
+    <div>
+      <h1>OEE & NVAT Rapportage</h1>
+      <div class="fields" id="fields">
+        <label>Datum<input type="date" data-k="datum"></label>
+        <label>Meter<input type="text" data-k="meter"></label>
+        <label>Kanteltafel<input type="text" data-k="kanteltafel"></label>
+        <label>Module-ID<input type="text" data-k="module"></label>
+        <label>Type<select data-k="type"><option value=""></option><option>wand</option><option>vloer</option><option>plafond</option></select></label>
+        <label>Bezetting tafel<input type="text" data-k="bezetting" inputmode="numeric"></label>
+        <label>Aantal app-medewerkers<input type="number" id="numWorkers" data-k="numWorkers" min="1" max="15" value="3" title="Pas het aantal medewerkers direct aan"></label>
+        <label>Volledig geregistreerd<select data-k="volledig"><option value=""></option><option>ja</option><option>nee</option></select></label>
+      </div>
+    </div>
+    <div class="clock">
+      <div class="dmeta">Doorlooptijd</div>
+      <div class="dtime num" id="dtime">00:00:00</div>
+      <div class="dmeta num" id="dmeta">Nog niet gestart</div>
+      <div class="row">
+        <button class="btn go" id="begin">Eerste materiaal op tafel</button>
+        <button class="btn end" id="eind" disabled>Module van tafel</button>
+      </div>
+      <button class="link" id="undoEnd" hidden>Einde terugdraaien</button>
+    </div>
+  </section>
+
+  <p class="legend">Tik bij een medewerker op de oorzaak zodra die stilstaat, en op "Weer aan het werk" als die verder gaat. Stilstand (NVAT) korter dan 1 minuut telt niet mee. P (geplande pauze) telt niet mee in het percentage.</p>
+
+  <div class="cols" id="cols"></div>
+
+  <div class="foot">
+    <button class="btn" id="csv" style="background:#2E8C5A; color:white; border:none;">Exporteer CSV Data</button>
+    <button class="btn" id="pdf" style="background:#1F6FB2; color:white; border:none;">Maak OEE PDF Rapport</button>
+    <button class="btn" id="reset">Nieuwe module</button>
+  </div>
+</div>
+
+<div class="dlg" id="dlg" role="dialog" aria-modal="true"><div class="box"><div id="dlgMsg"></div><div class="bt"><button class="btn" id="dlgNo">Annuleren</button><button class="btn go" id="dlgYes">OK</button></div></div></div>
+
+<script>
+(function(){
+const KEY='stilstand-oee-v4'; // Key updated so it picks up the dynamic rendering without glitching from v3 cache
+const DREMPEL=60000;
+const CODES=[
+  {code:'S1',name:'Materiaal of bevoorrading',color:'#1F6FB2'},
+  {code:'S2',name:'Bovenloopkraan',color:'#D9731A'},
+  {code:'S3',name:'Informatie of tekening',color:'#6B4FB3'},
+  {code:'S4',name:'Medewerker elders ingezet',color:'#B0457A'},
+  {code:'S5',name:'Controle of goedkeuring',color:'#2E7D8C'},
+  {code:'S6',name:'Geen plek bij 3D-stations',color:'#8C6A1F'},
+  {code:'S7',name:'Overig of onbekend',color:'#5C6670'},
+  {code:'S8',name:'Materiaal opnieuw bewerken',color:'#C8372D'},
+  {code:'S9',name:'Geen gereedschap',color:'#3F7A2E'},
+  {code:'P', name:'Geplande pauze',color:'#8A939B'}
+];
+const C=Object.fromEntries(CODES.map(c=>[c.code,c]));
+const $=id=>document.getElementById(id);
+const now=()=>Date.now();
+const pad=n=>String(n).padStart(2,'0');
+const today=()=>{const d=new Date();return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`};
+
+function fresh(){
+  const el = $('numWorkers');
+  const n = el && el.value ? parseInt(el.value) : 3;
+  return {
+    info:{datum:today(), numWorkers:n},
+    begin:null,
+    eind:null,
+    workers:Array.from({length:n}, (_,i)=>({name:`Medewerker ${i+1}`,segs:[]}))
+  };
+}
+
+function load(){try{const v=localStorage.getItem(KEY);return v?JSON.parse(v):null}catch(e){return null}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(s))}catch(e){}}
+let s=load()||fresh();
+
+let downloads=null;
+if(window.claude&&typeof window.claude.use==='function'){window.claude.use('downloads').then(d=>{downloads=d}).catch(()=>{})}
+
+function fmt(ms){const t=Math.max(0,Math.floor(ms/1000));return `${pad(Math.floor(t/3600))}:${pad(Math.floor(t%3600/60))}:${pad(t%60)}`}
+function clock(ts){const d=new Date(ts);return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`}
+function mins(ms){return (ms/60000).toFixed(1).replace('.',',')}
+function esc(t){return String(t??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+const endOf=g=>g.end??(s.eind??now());
+const dur=g=>endOf(g)-g.start;
+const counts=g=>g.end===null||dur(g)>=DREMPEL;
+const open=w=>{const g=w.segs[w.segs.length-1];return g&&g.end===null?g:null};
+const running=()=>s.begin!==null&&s.eind===null;
+
+function ask(msg,onYes,onlyOk){
+  const d=$('dlg');$('dlgMsg').textContent=msg;$('dlgNo').style.display=onlyOk?'none':'';
+  const close=()=>{d.classList.remove('open')};
+  $('dlgNo').onclick=close;$('dlgYes').onclick=()=>{close();if(onYes)onYes()};
+  d.classList.add('open');$('dlgYes').focus();
+}
+const say=m=>ask(m,null,true);
+
+/* Acties */
+function tapCode(wi,code){
+  if(!running()){say(s.eind?'Deze module is al van tafel. Draai het einde terug of begin een nieuwe module.':'Tik eerst op "Eerste materiaal op tafel".');return}
+  const w=s.workers[wi],g=open(w),t=now();
+  if(g){
+    if(g.code===code)return;
+    if(t-g.start<10000){g.code=code}
+    else{g.end=t;w.segs.push({code,start:t,end:null,handling:'',toel:''})}
+  }else w.segs.push({code,start:t,end:null,handling:'',toel:''});
+  save();renderCol(wi);
+}
+function resume(wi){const g=open(s.workers[wi]);if(g){g.end=now();save();renderCol(wi)}}
+function undo(wi){
+  const w=s.workers[wi],g=w.segs[w.segs.length-1];if(!g)return;
+  if(g.end===null)w.segs.pop();
+  else if(running())g.end=null;
+  else return;
+  save();renderCol(wi);
+}
+$('begin').onclick=()=>{if(s.begin)return;s.begin=now();save();renderAll()};
+$('eind').onclick=()=>ask('Module is van tafel? Lopende stilstanden worden op dit moment afgesloten.',()=>{
+  s.eind=now();s.workers.forEach(w=>{const g=open(w);if(g)g.end=s.eind});save();renderAll();
+});
+$('undoEnd').onclick=()=>{s.eind=null;save();renderAll()};
+$('reset').onclick=()=>ask('Alles wissen en een nieuwe module beginnen? Pas eerst medewerkers aan of exporteer de data indien nodig.',()=>{
+  const names=s.workers.map(w=>w.name),info=s.info;
+  s=fresh();
+  s.workers.forEach((w,i)=>{if(names[i])w.name=names[i]});
+  s.info.meter=info.meter||'';s.info.kanteltafel=info.kanteltafel||'';s.info.bezetting=info.bezetting||'';
+  save();renderAll();
+});
+
+/* Formulierkop - DYNAMISCHE AANPASSING WERKNEMERS */
+document.querySelectorAll('[data-k]').forEach(el=>{
+  el.addEventListener('input',(e)=>{
+    s.info[el.dataset.k] = el.value;
+    
+    // Als het aantal medewerkers verandert, direct de kolommen toevoegen of verwijderen
+    if(el.dataset.k === 'numWorkers') {
+      let n = parseInt(el.value);
+      if(!isNaN(n) && n > 0 && n <= 15) {
+        const cur = s.workers.length;
+        if(n > cur) {
+          for(let i=cur; i<n; i++) s.workers.push({name:`Medewerker ${i+1}`,segs:[]});
+        } else if(n < cur) {
+          s.workers = s.workers.slice(0, n);
+        }
+        renderAll();
+      }
+    }
+    save();
+  });
+});
+
+/* Weergave */
+function stats(w){
+  const per={};let stil=0,pauze=0;
+  w.segs.forEach(g=>{if(!counts(g))return;const d=dur(g);
+    if(g.code==='P')pauze+=d;else{stil+=d;per[g.code]=(per[g.code]||0)+d}});
+  const door=s.begin?(s.eind??now())-s.begin:0, netto=Math.max(door-pauze,0);
+  return{per,stil,pauze,door,netto,pct:netto?stil/netto*100:0};
+}
+function renderCol(wi){
+  const w=s.workers[wi],g=open(w),box=$('col'+wi),run=running();
+  box.innerHTML=`
+    <input class="name" value="${esc(w.name)}" aria-label="Naam medewerker">
+    <div class="status ${g?'stil':(run?'':'idle')}" ${g?`style="--c:${C[g.code].color}"`:''}>
+      <b>${g?`${g.code} ${esc(C[g.code].name)}`:(run?'Aan het werk':(s.eind?'Module klaar':'Wacht op start'))}</b>
+      <span class="t num" data-t>${g?fmt(dur(g)).slice(3):''}</span>
+    </div>
+    <div class="codes">${CODES.map(c=>`<button class="code${g&&g.code===c.code?' active':''}" style="--c:${c.color}" data-code="${c.code}" ${run?'':'disabled'}><span class="k">${c.code}</span><span class="n">${esc(c.name)}</span></button>`).join('')}</div>
+    <div class="acts">
+      <button class="btn resume" data-resume ${g?'':'disabled'}>Weer aan het werk</button>
+      <button class="btn" data-undo ${w.segs.length&&(run||open(w))?'':'disabled'} title="Laatste tik ongedaan maken">Ongedaan</button>
+    </div>
+    <div class="sum" data-sum></div>
+    <div class="log">${w.segs.length?w.segs.map((x,i)=>({x,i})).reverse().map(({x,i})=>`
+      <div class="entry${counts(x)?'':' under'}" style="--c:${C[x.code].color}" data-i="${i}">
+        <div class="top"><b>${x.code}</b><span class="num">${clock(x.start)} – ${x.end===null?'loopt':clock(x.end)}</span><span class="num" data-d>${mins(dur(x))} min</span></div>
+        ${counts(x)?'':'<div class="flag">Korter dan 1 minuut, telt niet mee</div>'}
+        <input placeholder="Handling" value="${esc(x.handling)}" data-f="handling">
+        <input placeholder="Toelichting" value="${esc(x.toel)}" data-f="toel">
+      </div>`).join(''):'<div class="empty">Nog geen stilstand geregistreerd.</div>'}
+    </div>`;
+  box.querySelector('.name').addEventListener('input',e=>{w.name=e.target.value;save()});
+  box.querySelectorAll('[data-code]').forEach(b=>b.onclick=()=>tapCode(wi,b.dataset.code));
+  box.querySelector('[data-resume]').onclick=()=>resume(wi);
+  box.querySelector('[data-undo]').onclick=()=>undo(wi);
+  box.querySelectorAll('.entry input').forEach(inp=>inp.addEventListener('input',()=>{
+    w.segs[+inp.closest('.entry').dataset.i][inp.dataset.f]=inp.value;save();
+  }));
+  tickCol(wi);
+}
+function tickCol(wi){
+  const w=s.workers[wi],box=$('col'+wi),g=open(w),st=stats(w);
+  const t=box.querySelector('[data-t]');if(t&&g)t.textContent=fmt(dur(g)).slice(3);
+  if(g){const d=box.querySelector(`.entry[data-i="${w.segs.length-1}"] [data-d]`);if(d)d.textContent=`${mins(dur(g))} min`}
+  const rows=Object.entries(st.per).sort((a,b)=>b[1]-a[1]);
+  const oee = st.netto ? Math.max(0, st.netto - st.stil) / st.netto * 100 : 0;
+  
+  box.querySelector('[data-sum]').innerHTML=`
+    <div class="big" style="color:var(--stop)"><span>NVAT (Stilstand)</span><span class="num">${mins(st.stil)} min (${st.pct.toFixed(1).replace('.',',')}%)</span></div>
+    <div class="big" style="color:var(--ok); margin-bottom: 6px;"><span>OEE (Waarde toevoegend)</span><span class="num">${mins(Math.max(st.netto-st.stil,0))} min (${oee.toFixed(1).replace('.',',')}%)</span></div>
+    <div class="bar">${rows.map(([c,ms])=>`<div style="--c:${C[c].color};flex:${ms} 0 0"></div>`).join('')}<div style="flex:${Math.max(st.netto-st.stil,0)} 0 0;background:var(--ok)"></div></div>
+    ${rows.map(([c,ms])=>`<div class="pc"><span>${c} ${esc(C[c].name)}</span><span class="num">${mins(ms)} min</span></div>`).join('')}
+    ${st.pauze?`<div class="pc"><span>P Geplande pauze (niet in %)</span><span class="num">${mins(st.pauze)} min</span></div>`:''}`;
+}
+function renderClock(){
+  const run=running();
+  $('dtime').textContent=fmt(s.begin?(s.eind??now())-s.begin:0);
+  $('dmeta').textContent=s.begin?`Begin ${clock(s.begin)}${s.eind?`, eind ${clock(s.eind)}`:', loopt'}`:'Nog niet gestart';
+  $('begin').disabled=!!s.begin;$('eind').disabled=!run;$('undoEnd').hidden=!s.eind;
+}
+function renderAll(){
+  document.querySelectorAll('[data-k]').forEach(el=>{
+    if(el.dataset.k==='numWorkers' && !s.info.numWorkers) s.info.numWorkers = s.workers.length;
+    // Voorkom dat de actieve input (waar je nu in typt) overschreven wordt door de refresh
+    if (document.activeElement !== el) {
+      el.value=s.info[el.dataset.k]??'';
+    }
+  });
+  const cols=$('cols');
+  cols.innerHTML=s.workers.map((_,i)=>`<section class="panel col" id="col${i}"></section>`).join('');
+  s.workers.forEach((_,i)=>renderCol(i));renderClock();
+}
+setInterval(()=>{if(running()){renderClock();s.workers.forEach((_,i)=>tickCol(i))}},500);
+
+/* Export PDF */
+$('pdf').onclick = () => window.print();
+
+/* Export CSV */
+function cell(v){v=String(v??'');return /[;"\n\r]/.test(v)?`"${v.replace(/"/g,'""')}"`:v}
+function exportCsv(){
+  if(!s.begin){say('Er is nog niets gemeten.');return}
+  const i=s.info,L=[],row=a=>L.push(a.map(cell).join(';'));
+  const door=(s.eind??now())-s.begin;
+  row(['Registratie OEE & NVAT per module']);
+  row(['Datum',i.datum,'Meter',i.meter,'Kanteltafel',i.kanteltafel,'Module-ID',i.module,'Type',i.type]);
+  row(['Bezetting bij kanteltafel',i.bezetting,'Volledig geregistreerd',i.volledig,'Aantal app-medewerkers',i.numWorkers]);
+  row(['Begin doorlooptijd',clock(s.begin),'Eind doorlooptijd',s.eind?clock(s.eind):'loopt nog','Doorlooptijd (min)',mins(door)]);
+  row([]);
+  row(['Medewerker','Code','Oorzaak','Start stilstand','Stop stilstand','Duur (min)','Handling','Toelichting','Telt mee']);
+  s.workers.forEach(w=>w.segs.forEach(g=>row([w.name,g.code,C[g.code].name,clock(g.start),g.end===null?'loopt nog':clock(g.end),mins(dur(g)),g.handling,g.toel,counts(g)?'ja':'nee (< 1 min)'])));
+  row([]);
+  row(['Medewerker','NVAT / Stilstand (min)','Geplande pauze (min)','Doorlooptijd excl. P (min)','NVAT (%)','OEE (%)']);
+  s.workers.forEach(w=>{
+    const st=stats(w);
+    const oee = st.netto ? Math.max(0, st.netto - st.stil) / st.netto * 100 : 0;
+    row([w.name,mins(st.stil),mins(st.pauze),mins(st.netto),st.pct.toFixed(1).replace('.',','), oee.toFixed(1).replace('.',',')])
+  });
+  row([]);
+  row(['Medewerker','Code','Oorzaak','Minuten','Aantal keer']);
+  s.workers.forEach(w=>CODES.forEach(c=>{const gs=w.segs.filter(g=>g.code===c.code&&counts(g));if(gs.length)row([w.name,c.code,c.name,mins(gs.reduce((t,g)=>t+dur(g),0)),gs.length])}));
+  const blob=new Blob(['\﻿'+L.join('\r\n')],{type:'text/csv;charset=utf-8'});
+  const filename=`OEE_NVAT_${i.datum||today()}_${(i.module||'module').replace(/[^\w-]+/g,'_')}.csv`;
+  if(downloads){
+    downloads.save({filename,data:blob}).catch(err=>{
+      if(err&&err.code==='declined')return;
+      if(err&&err.code==='rate_limited'){say('Er staat al een downloadvenster open. Probeer het zo opnieuw.');return}
+      say('Exporteren lukt hier niet. Open de app als los bestand om de CSV op te slaan.');
+    });return;
+  }
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+$('csv').onclick=exportCsv;
+document.addEventListener('keydown',e=>{if($('dlg').classList.contains('open')&&e.key==='Escape')$('dlgNo').click()});
+renderAll();
+})();
+</script>
+</body>
+</html>
